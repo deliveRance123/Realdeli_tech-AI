@@ -33,11 +33,17 @@ async def webhook_handler(request):
         tg_app = request.app.get("tg_app")
         if tg_app:
             update = Update.de_json(data, tg_app.bot)
-            await tg_app.process_update(update)
+            if update:
+                logger.info(f"Incoming webhook update #{update.update_id}")
+                await tg_app.process_update(update)
         return web.Response(text="OK", status=200)
     except Exception as e:
         logger.error(f"Error processing webhook update: {e}")
         return web.Response(text="Error", status=500)
+
+
+async def error_handler(update: object, context) -> None:
+    logger.error(f"Telegram Exception handling update: {context.error}\n{traceback.format_exc()}")
 
 
 async def on_startup(app):
@@ -51,6 +57,7 @@ async def on_startup(app):
     logger.info("Building Telegram bot application...")
     try:
         tg_app = ApplicationBuilder().token(BOT_TOKEN).build()
+        tg_app.add_error_handler(error_handler)
 
         from handlers import start, orders, topics, ebooks, admin
         for h in start.handlers + orders.handlers + topics.handlers + ebooks.handlers + admin.handlers:
@@ -63,12 +70,12 @@ async def on_startup(app):
         if WEBHOOK_URL:
             target_url = f"{WEBHOOK_URL}/webhook"
             logger.info(f"Configuring Telegram webhook to: {target_url}")
-            await tg_app.bot.set_webhook(url=target_url, drop_pending_updates=True)
+            await tg_app.bot.set_webhook(url=target_url, drop_pending_updates=False)
             logger.info("Telegram webhook configured successfully!")
         else:
             logger.info("Cleaning up any previous webhooks before starting polling...")
-            await tg_app.bot.delete_webhook(drop_pending_updates=True)
-            await tg_app.updater.start_polling(drop_pending_updates=True)
+            await tg_app.bot.delete_webhook(drop_pending_updates=False)
+            await tg_app.updater.start_polling(drop_pending_updates=False)
             logger.info("Telegram polling started successfully!")
 
     except Exception as e:
