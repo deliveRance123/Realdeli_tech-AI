@@ -50,7 +50,7 @@ async def error_handler(update: object, context) -> None:
 
 async def background_job_radar(tg_app):
     """Periodically scans for fresh remote jobs and alerts the Admin."""
-    await asyncio.sleep(60)  # Wait 1 minute after startup
+    await asyncio.sleep(60)
     while True:
         try:
             logger.info("Running background Job Radar scan...")
@@ -78,7 +78,7 @@ async def background_job_radar(tg_app):
         except Exception as e:
             logger.error(f"Error in background job radar loop: {e}")
 
-        # Scan every 4 hours (14,400 seconds)
+        # Scan every 4 hours
         await asyncio.sleep(14400)
 
 
@@ -95,14 +95,20 @@ async def on_startup(app):
         tg_app = ApplicationBuilder().token(BOT_TOKEN).build()
         tg_app.add_error_handler(error_handler)
 
-        from handlers import start, orders, topics, ebooks, jobs, admin, ai_chat
+        from handlers import (
+            start, orders, payments, academic,
+            topics, ebooks, jobs, reviews, admin, ai_chat
+        )
         
         all_handlers = (
             start.handlers +
             orders.handlers +
+            payments.handlers +
+            academic.handlers +
             topics.handlers +
             ebooks.handlers +
             jobs.handlers +
+            reviews.handlers +
             admin.handlers +
             ai_chat.handlers
         )
@@ -125,7 +131,6 @@ async def on_startup(app):
             await tg_app.updater.start_polling(drop_pending_updates=False)
             logger.info("Telegram polling started successfully!")
 
-        # Launch background Job Radar task
         asyncio.create_task(background_job_radar(tg_app))
         logger.info("Background Job Radar activated!")
 
