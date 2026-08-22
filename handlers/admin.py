@@ -1,4 +1,4 @@
-from telegram import Update
+ï»¿from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 from sqlalchemy import select, func
 
@@ -22,14 +22,14 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         product_count = (await session.execute(select(func.count(Product.id)))).scalar() or 0
 
     stats_text = (
-        "\U0001f4ca <b>RealDeliTechAI — Admin Dashboard</b>\n\n"
+        "\U0001f4ca <b>RealDeliTechAI ï¿½ Admin Dashboard</b>\n\n"
         f"\U0001f465 <b>Total Customers:</b> {cust_count}\n"
         f"\U0001f4e6 <b>Total Orders:</b> {order_count}\n"
         f"\U0001f195 <b>Pending Orders:</b> {new_orders}\n"
         f"\U0001f4da <b>Listed Products:</b> {product_count}\n\n"
         "<b>Admin Commands:</b>\n"
-        "• /orders — View recent 5 orders\n"
-        "• /addproduct Title | Price | Description — Add PDF/Ebook"
+        "ï¿½ /orders ï¿½ View recent 5 orders\n"
+        "ï¿½ /addproduct Title | Price | Description ï¿½ Add PDF/Ebook"
     )
     await update.message.reply_text(stats_text, parse_mode="HTML")
 

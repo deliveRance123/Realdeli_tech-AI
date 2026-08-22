@@ -1,3 +1,4 @@
+ï»¿# -*- coding: utf-8 -*-
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 
@@ -16,10 +17,10 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "\U0001f44b Welcome to <b>RealDeliTechAI</b>!\n\n"
         "We provide professional assistance with:\n"
-        "• Project Write-ups & Seminar Reports\n"
-        "• Project Topics & Research Guidance\n"
-        "• Graphic, UI/UX & Product Design\n"
-        "• Academic Guides, PDFs & Ebooks\n\n"
+        "- Project Write-ups & Seminar Reports\n"
+        "- Project Topics & Research Guidance\n"
+        "- Graphic, UI/UX & Product Design\n"
+        "- Academic Guides, PDFs & Ebooks\n\n"
         "Please choose an option below to get started:"
     )
     await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")

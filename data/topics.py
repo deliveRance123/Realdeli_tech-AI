@@ -1,4 +1,4 @@
-# Starter topic bank — expand this freely with your own past project titles.
+﻿# Starter topic bank — expand this freely with your own past project titles.
 # Keys are what the user sees as buttons; keep them short.
 
 TOPICS = {
