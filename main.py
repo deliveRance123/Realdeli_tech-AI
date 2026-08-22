@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-import json
+import traceback
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -30,9 +30,10 @@ async def health_check(request):
 async def webhook_handler(request):
     try:
         data = await request.json()
-        tg_app = request.app["tg_app"]
-        update = Update.de_json(data, tg_app.bot)
-        await tg_app.process_update(update)
+        tg_app = request.app.get("tg_app")
+        if tg_app:
+            update = Update.de_json(data, tg_app.bot)
+            await tg_app.process_update(update)
         return web.Response(text="OK", status=200)
     except Exception as e:
         logger.error(f"Error processing webhook update: {e}")
@@ -45,28 +46,33 @@ async def on_startup(app):
         await init_db()
         logger.info("Database initialized successfully.")
     except Exception as e:
-        logger.error(f"Database init warning (will retry on demand): {e}")
+        logger.error(f"Database init warning: {e}\n{traceback.format_exc()}")
 
     logger.info("Building Telegram bot application...")
-    tg_app = ApplicationBuilder().token(BOT_TOKEN).build()
+    try:
+        tg_app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    from handlers import start, orders, topics, ebooks, admin
-    for h in start.handlers + orders.handlers + topics.handlers + ebooks.handlers + admin.handlers:
-        tg_app.add_handler(h)
+        from handlers import start, orders, topics, ebooks, admin
+        for h in start.handlers + orders.handlers + topics.handlers + ebooks.handlers + admin.handlers:
+            tg_app.add_handler(h)
 
-    await tg_app.initialize()
-    await tg_app.start()
-    app["tg_app"] = tg_app
+        await tg_app.initialize()
+        await tg_app.start()
+        app["tg_app"] = tg_app
 
-    if WEBHOOK_URL:
-        target_url = f"{WEBHOOK_URL}/webhook"
-        logger.info(f"Setting Telegram webhook to: {target_url}")
-        await tg_app.bot.set_webhook(url=target_url, drop_pending_updates=True)
-        logger.info("Telegram webhook configured successfully!")
-    else:
-        logger.info("WEBHOOK_URL not set - starting Telegram bot in POLLING mode...")
-        await tg_app.updater.start_polling(drop_pending_updates=True)
-        logger.info("Telegram polling started successfully!")
+        if WEBHOOK_URL:
+            target_url = f"{WEBHOOK_URL}/webhook"
+            logger.info(f"Configuring Telegram webhook to: {target_url}")
+            await tg_app.bot.set_webhook(url=target_url, drop_pending_updates=True)
+            logger.info("Telegram webhook configured successfully!")
+        else:
+            logger.info("Cleaning up any previous webhooks before starting polling...")
+            await tg_app.bot.delete_webhook(drop_pending_updates=True)
+            await tg_app.updater.start_polling(drop_pending_updates=True)
+            logger.info("Telegram polling started successfully!")
+
+    except Exception as e:
+        logger.error(f"Fatal error starting Telegram bot: {e}\n{traceback.format_exc()}")
 
     logger.info(f"Server is listening on 0.0.0.0:{PORT} - ready for Render health checks.")
 
@@ -74,11 +80,14 @@ async def on_startup(app):
 async def on_cleanup(app):
     tg_app = app.get("tg_app")
     if tg_app:
-        logger.info("Stopping Telegram bot...")
-        if tg_app.updater and tg_app.updater.running:
-            await tg_app.updater.stop()
-        await tg_app.stop()
-        await tg_app.shutdown()
+        try:
+            logger.info("Stopping Telegram bot...")
+            if tg_app.updater and tg_app.updater.running:
+                await tg_app.updater.stop()
+            await tg_app.stop()
+            await tg_app.shutdown()
+        except Exception as e:
+            logger.error(f"Error during bot shutdown: {e}")
 
 
 def create_app():
