@@ -50,8 +50,8 @@ async def on_startup(app):
     logger.info("Building Telegram bot application...")
     tg_app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    from handlers import start, orders, topics, ebooks
-    for h in start.handlers + orders.handlers + topics.handlers + ebooks.handlers:
+    from handlers import start, orders, topics, ebooks, admin
+    for h in start.handlers + orders.handlers + topics.handlers + ebooks.handlers + admin.handlers:
         tg_app.add_handler(h)
 
     await tg_app.initialize()

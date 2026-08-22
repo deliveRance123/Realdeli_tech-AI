@@ -2,4 +2,5 @@ aiohttp>=3.9.0
 python-telegram-bot==21.6
 SQLAlchemy==2.0.35
 psycopg[binary]>=3.1.18
+greenlet>=3.0.0
 python-dotenv>=1.0.0

@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ContextTypes, CallbackQueryHandler, MessageHandler,
-    filters, ConversationHandler,
+    filters, ConversationHandler, CommandHandler,
 )
 from sqlalchemy import select
 
@@ -28,31 +28,34 @@ async def start_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if category_key == "write_up":
         prompt = (
             f"<b>{label}</b>\n\n"
-            "Please send me the following in one message:\n"
-            "1. Your name\n"
-            "2. School / Department\n"
-            "3. Project topic (or 'need a topic')\n"
-            "4. Deadline\n"
-            "5. Any extra notes"
+            "Please reply with the following details in one message:\n\n"
+            "1. Your Full Name\n"
+            "2. School / Department / Level\n"
+            "3. Project Topic (or specify 'Need Topic Suggestion')\n"
+            "4. Deadline Date\n"
+            "5. Any Specific Requirements / Notes"
         )
     else:
         prompt = (
             f"<b>{label}</b>\n\n"
-            "Please send me the following in one message:\n"
-            "1. Your name\n"
-            "2. What you need designed (flyer, logo, mockup, etc.)\n"
-            "3. Size/format if known\n"
-            "4. Deadline\n"
-            "5. Reference images/links (if any)"
+            "Please reply with the following details in one message:\n\n"
+            "1. Your Full Name\n"
+            "2. Design Type (Flyer, Logo, UI Mockup, Banner, etc.)\n"
+            "3. Format / Dimensions (if known)\n"
+            "4. Deadline Date\n"
+            "5. Reference Links or Style Preferences"
         )
 
-    await query.edit_message_text(prompt, parse_mode="HTML")
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("\u2b05\ufe0f Cancel & Return to Menu", callback_data="cancel_order")]
+    ])
+    await query.edit_message_text(prompt, reply_markup=keyboard, parse_mode="HTML")
     return WAITING_FOR_DETAILS
 
 
 async def receive_order_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    category = context.user_data.get("category")
-    category_label = context.user_data.get("category_label")
+    category = context.user_data.get("category", "general")
+    category_label = context.user_data.get("category_label", "Service")
 
     async with async_session() as session:
         result = await session.execute(
@@ -78,18 +81,25 @@ async def receive_order_details(update: Update, context: ContextTypes.DEFAULT_TY
         await session.commit()
         order_id = order.id
 
-    await update.message.reply_text(
-        "\u2705 Got it! Your request has been sent. I'll DM you a quote shortly."
+    success_msg = (
+        "\u2705 <b>Request Received Successfully!</b>\n\n"
+        f"Your Order ID is: <code>#{order_id}</code>\n"
+        "Our team has been notified and will contact you with a quote and delivery timeline."
     )
+    await update.message.reply_text(success_msg, parse_mode="HTML")
 
+    # Notify Admin immediately
     admin_text = (
         f"\U0001f195 <b>New {category_label} Request</b> (Order #{order_id})\n\n"
-        f"From: {update.effective_user.full_name} "
-        f"(@{update.effective_user.username or 'no_username'})\n"
-        f"Telegram ID: {update.effective_user.id}\n\n"
-        f"Details:\n{update.message.text}"
+        f"<b>Customer:</b> {update.effective_user.full_name}\n"
+        f"<b>Username:</b> @{update.effective_user.username or 'No username'}\n"
+        f"<b>Telegram ID:</b> <code>{update.effective_user.id}</code>\n\n"
+        f"<b>Details:</b>\n{update.message.text}"
     )
-    await context.bot.send_message(ADMIN_CHAT_ID, admin_text, parse_mode="HTML")
+    try:
+        await context.bot.send_message(ADMIN_CHAT_ID, admin_text, parse_mode="HTML")
+    except Exception as e:
+        print(f"Error sending admin notification: {e}")
 
     return ConversationHandler.END
 
@@ -98,6 +108,20 @@ async def cancel_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query:
         await query.answer()
+        from handlers.start import main_menu_keyboard
+        await query.edit_message_text(
+            "Request cancelled. What do you need today?",
+            reply_markup=main_menu_keyboard(),
+        )
+    return ConversationHandler.END
+
+
+async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from handlers.start import main_menu_keyboard
+    await update.message.reply_text(
+        "Operation cancelled. Main menu:",
+        reply_markup=main_menu_keyboard(),
+    )
     return ConversationHandler.END
 
 
@@ -111,10 +135,12 @@ _conv = ConversationHandler(
         ]
     },
     fallbacks=[
-        CallbackQueryHandler(cancel_order, pattern="^back_to_menu$")
+        CallbackQueryHandler(cancel_order, pattern="^(cancel_order|back_to_menu)$"),
+        CommandHandler("cancel", cancel_cmd),
     ],
     per_message=False,
+    per_chat=True,
+    per_user=True,
 )
 
 handlers = [_conv]
-
