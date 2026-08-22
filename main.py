@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 
@@ -13,13 +14,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 PORT = int(os.environ.get("PORT", 10000))
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "").rstrip("/")
+
+
+async def post_init(application):
+    await init_db()
+    logger.info("Database initialized successfully")
 
 
 def main():
-    async def post_init(application):
-        await init_db()
-        logger.info("Database initialized")
+    # Fix for Python 3.12+ / 3.14 where get_event_loop no longer creates a loop automatically
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
 
@@ -30,6 +39,7 @@ def main():
     logger.info("RealDeliTechAI bot starting...")
 
     if WEBHOOK_URL:
+        logger.info(f"Running in WEBHOOK mode at {WEBHOOK_URL}/webhook on port {PORT}")
         app.run_webhook(
             listen="0.0.0.0",
             port=PORT,
@@ -37,7 +47,8 @@ def main():
             url_path="webhook",
         )
     else:
-        app.run_polling()
+        logger.info("Running in POLLING mode...")
+        app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
