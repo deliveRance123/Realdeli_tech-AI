@@ -11,8 +11,9 @@ from aiohttp import web
 from telegram import Update
 from telegram.ext import ApplicationBuilder
 
-from config import BOT_TOKEN
+from config import BOT_TOKEN, ADMIN_CHAT_ID
 from database.db import init_db
+from services.jobs import fetch_remote_jobs
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -47,6 +48,40 @@ async def error_handler(update: object, context) -> None:
     logger.error(f"Telegram Exception handling update: {context.error}\n{traceback.format_exc()}")
 
 
+async def background_job_radar(tg_app):
+    """Periodically scans for fresh remote jobs and alerts the Admin."""
+    await asyncio.sleep(60)  # Wait 1 minute after startup
+    while True:
+        try:
+            logger.info("Running background Job Radar scan...")
+            jobs = await fetch_remote_jobs(category="all", limit=3)
+            if jobs and ADMIN_CHAT_ID:
+                lines = []
+                for j in jobs:
+                    lines.append(f"• <b>{j['title']}</b> ({j['company']})\n  🔗 <a href='{j['url']}'>Apply Here</a>")
+                
+                alert_text = (
+                    "🔔 <b>RealDeli Job Radar Alert!</b>\n\n"
+                    "Fresh remote jobs just posted:\n\n" + 
+                    "\n\n".join(lines) +
+                    "\n\n💡 <i>Use /proposal [Job Title] in bot to generate your application pitch!</i>"
+                )
+                try:
+                    await tg_app.bot.send_message(
+                        chat_id=ADMIN_CHAT_ID,
+                        text=alert_text,
+                        parse_mode="HTML",
+                        disable_web_page_preview=True,
+                    )
+                except Exception as ex:
+                    logger.error(f"Could not send Job Radar alert: {ex}")
+        except Exception as e:
+            logger.error(f"Error in background job radar loop: {e}")
+
+        # Scan every 4 hours (14,400 seconds)
+        await asyncio.sleep(14400)
+
+
 async def on_startup(app):
     logger.info("Connecting to database and creating tables...")
     try:
@@ -62,7 +97,6 @@ async def on_startup(app):
 
         from handlers import start, orders, topics, ebooks, jobs, admin, ai_chat
         
-        # Order handlers first, commands next, general AI text chat last
         all_handlers = (
             start.handlers +
             orders.handlers +
@@ -90,6 +124,10 @@ async def on_startup(app):
             await tg_app.bot.delete_webhook(drop_pending_updates=False)
             await tg_app.updater.start_polling(drop_pending_updates=False)
             logger.info("Telegram polling started successfully!")
+
+        # Launch background Job Radar task
+        asyncio.create_task(background_job_radar(tg_app))
+        logger.info("Background Job Radar activated!")
 
     except Exception as e:
         logger.error(f"Fatal error starting Telegram bot: {e}\n{traceback.format_exc()}")
