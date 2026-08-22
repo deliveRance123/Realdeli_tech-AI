@@ -1,64 +1,44 @@
-import asyncio
 import logging
 import os
 
 from dotenv import load_dotenv
-load_dotenv()  # Loads .env locally; on Render, env vars are already set.
+load_dotenv()
 
-from aiohttp import web
-from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from telegram.ext import ApplicationBuilder
 
 from config import BOT_TOKEN
 from database.db import init_db
-from handlers import start, orders, topics, ebooks
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Render sets PORT automatically. WEBHOOK_URL = your Render service public URL.
 PORT = int(os.environ.get("PORT", 10000))
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
-WEBHOOK_PATH = "/webhook"
 
 
-async def main():
-    await init_db()
+def main():
+    async def post_init(application):
+        await init_db()
+        logger.info("Database initialized")
 
-    bot = Bot(token=BOT_TOKEN)
-    dp = Dispatcher(storage=MemoryStorage())
+    app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
 
-    dp.include_router(start.router)
-    dp.include_router(orders.router)
-    dp.include_router(topics.router)
-    dp.include_router(ebooks.router)
+    from handlers import start, orders, topics, ebooks
+    for h in start.handlers + orders.handlers + topics.handlers + ebooks.handlers:
+        app.add_handler(h)
 
-    # Tell Telegram where to send updates
-    await bot.set_webhook(f"{WEBHOOK_URL}{WEBHOOK_PATH}")
-    logging.info(f"Webhook set: {WEBHOOK_URL}{WEBHOOK_PATH}")
+    logger.info("RealDeliTechAI bot starting...")
 
-    # Build the web app that receives Telegram updates
-    app = web.Application()
-
-    # Health check so Render knows the service is alive
-    async def health(request):
-        return web.Response(text="RealDeliTechAI bot is running OK")
-
-    app.router.add_get("/", health)
-
-    # Wire aiogram into the web server
-    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
-    setup_application(app, dp, bot=bot)
-
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", PORT)
-    await site.start()
-
-    logging.info(f"Bot running on port {PORT}")
-    await asyncio.Event().wait()  # Keep running forever
+    if WEBHOOK_URL:
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=f"{WEBHOOK_URL}/webhook",
+            url_path="webhook",
+        )
+    else:
+        app.run_polling()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
+    main()

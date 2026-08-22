@@ -1,39 +1,47 @@
-from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import ContextTypes, CallbackQueryHandler
 
 from data.topics import TOPICS
 
-router = Router()
 
+async def show_departments(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-@router.callback_query(F.data == "menu_topic")
-async def show_departments(callback: CallbackQuery):
     buttons = [
-        [InlineKeyboardButton(text=dept, callback_data=f"topic_dept::{dept}")]
+        [InlineKeyboardButton(dept, callback_data=f"topic_dept::{dept}")]
         for dept in TOPICS.keys()
     ]
-    buttons.append([InlineKeyboardButton(text="⬅️ Back", callback_data="back_to_menu")])
-    await callback.message.edit_text(
+    buttons.append([InlineKeyboardButton("\u2b05\ufe0f Back", callback_data="back_to_menu")])
+
+    await query.edit_message_text(
         "Pick your department:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
-    await callback.answer()
 
 
-@router.callback_query(F.data.startswith("topic_dept::"))
-async def show_topics(callback: CallbackQuery):
-    dept = callback.data.split("::", 1)[1]
-    topics = TOPICS.get(dept, [])
+async def show_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-    if not topics:
-        text = f"No topics loaded yet for *{dept}* — message us directly and we'll suggest one."
+    dept = query.data.split("::", 1)[1]
+    topics_list = TOPICS.get(dept, [])
+
+    if not topics_list:
+        text = f"No topics loaded yet for <b>{dept}</b> — message us directly and we'll suggest one."
     else:
-        lines = "\n".join(f"{i+1}. {t}" for i, t in enumerate(topics))
-        text = f"*{dept} — Suggested Topics*\n\n{lines}\n\nWant a custom topic? Tap below."
+        lines = "\n".join(f"{i+1}. {t}" for i, t in enumerate(topics_list))
+        text = f"<b>{dept} — Suggested Topics</b>\n\n{lines}\n\nWant a custom topic? Tap below."
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📄 Request Write-up for one of these", callback_data="menu_writeup")],
-        [InlineKeyboardButton(text="⬅️ Back", callback_data="back_to_menu")],
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("\U0001f4c4 Request Write-up for one of these", callback_data="menu_writeup")],
+        [InlineKeyboardButton("\u2b05\ufe0f Back", callback_data="back_to_menu")],
     ])
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
-    await callback.answer()
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+handlers = [
+    CallbackQueryHandler(show_departments, pattern="^menu_topic$"),
+    CallbackQueryHandler(show_topics, pattern="^topic_dept::"),
+]
+
