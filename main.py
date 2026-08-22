@@ -1,4 +1,5 @@
-﻿import asyncio
+﻿# -*- coding: utf-8 -*-
+import asyncio
 import logging
 import os
 import traceback
@@ -24,7 +25,7 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "").strip().rstrip("/")
 
 
 async def health_check(request):
-    return web.Response(text="RealDeliTechAI Bot is Live and Healthy! ??\n", status=200)
+    return web.Response(text="RealDeliTechAI Bot is Live and Healthy! 🚀\n", status=200)
 
 
 async def webhook_handler(request):
@@ -34,7 +35,7 @@ async def webhook_handler(request):
         if tg_app:
             update = Update.de_json(data, tg_app.bot)
             if update:
-                logger.info(f"Incoming webhook update #{update.update_id}")
+                logger.info(f"Incoming update #{update.update_id}")
                 await tg_app.process_update(update)
         return web.Response(text="OK", status=200)
     except Exception as e:
@@ -59,8 +60,20 @@ async def on_startup(app):
         tg_app = ApplicationBuilder().token(BOT_TOKEN).build()
         tg_app.add_error_handler(error_handler)
 
-        from handlers import start, orders, topics, ebooks, admin
-        for h in start.handlers + orders.handlers + topics.handlers + ebooks.handlers + admin.handlers:
+        from handlers import start, orders, topics, ebooks, jobs, admin, ai_chat
+        
+        # Order handlers first, commands next, general AI text chat last
+        all_handlers = (
+            start.handlers +
+            orders.handlers +
+            topics.handlers +
+            ebooks.handlers +
+            jobs.handlers +
+            admin.handlers +
+            ai_chat.handlers
+        )
+        
+        for h in all_handlers:
             tg_app.add_handler(h)
 
         await tg_app.initialize()
